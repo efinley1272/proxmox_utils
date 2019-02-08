@@ -1,0 +1,173 @@
+#!/usr/bin/perl
+
+use strict;
+use DateTime;
+use Sys::Hostname;
+
+my $host = hostname;
+
+my $qm = '/usr/sbin/qm';
+my $pct = '/usr/sbin/pct';
+my $zfs = '/sbin/zfs';
+my $grep = '/bin/grep';
+my $rsync = '/usr/bin/rsync';
+
+my $keep = 3; #number of days to keep snapshots
+my $localTZ = DateTime::TimeZone->new( name => 'local' );
+my $dt_now = DateTime->now( time_zone => $localTZ );
+my $localDataSet = 'tank/data';
+my $configDataSet = $localDataSet . '/config';
+my $configMountPoint = '/'. $configDataSet;
+
+sub get_ids {
+    my $cmd = shift;
+
+    my @ids = map { /^\s*(\d+)\s+/ } grep { ! /^\s*vmid/i } `$cmd list`;
+
+    return \@ids;
+}
+
+sub can_snapshot {
+    my $cmd = shift;
+    my $id = shift;
+
+    my @lines = `$cmd config $id`;
+    if (grep(/description.*no\s*snap/i, @lines)) { return 0; }
+
+    return 1;
+}
+
+sub get_status {
+    my $cmd = shift;
+    my $id = shift;
+
+    my ($status) = map { /^status:\s+(.*)\s*$/ } `$cmd status $id`;
+
+    return $status;
+}
+
+sub can_shutdown {
+    my $cmd = shift;
+    my $id = shift;
+
+    my @lines = `$cmd config $id`;
+    if (grep(/description.*no\s*shut/i, @lines)) { return 0; }
+
+    return 1;
+}
+
+sub do_shutdown {
+    my $cmd = shift;
+    my $id = shift;
+
+    `$cmd shutdown $id --timeout 300`;
+}
+
+sub start {
+    my $cmd = shift;
+    my $id = shift;
+
+    `$cmd start $id`;
+}
+
+sub take_snapshot {
+    my $cmd = shift;
+    my $id = shift;
+
+    return unless can_snapshot($cmd, $id);
+
+    #
+    # shut it down if it's not marked 'noshutdown' in 'Notes'
+    #
+    my $original_status = get_status($cmd, $id);
+    if ($original_status eq 'running') { do_shutdown($cmd, $id) if can_shutdown($cmd, $id); }
+    my $status = get_status($cmd, $id);
+
+    #
+    # take snapshot
+    #
+    my $name = "periodic_" . $status . "_" . $dt_now->ymd('_') . "_" . $dt_now->hms('_');
+    `$cmd snapshot $id $name`;
+
+    #
+    # start it back up if it was originally running and now it's not
+    #
+    if ($original_status eq 'running' and $status ne 'running') { start($cmd, $id); }
+}
+
+sub trim_snapshot {
+    my $cmd = shift;
+    my $id = shift;
+
+    my @snapshots = map { /^(periodic_.*?)\s/ } grep { /^periodic_/ } `$cmd listsnapshot $id`;
+    foreach my $snapshot (@snapshots) {
+        my ($year, $month, $dom, $hour, $minute, $second) = $snapshot =~ m|(\d+)_(\d+)_(\d+)_(\d+)_(\d+)_(\d+)|;
+
+        my $dt = $dt_now->clone()->subtract( days => $keep );
+        my $snap_dt = DateTime->new(
+            year      => $year,
+            month     => $month,
+            day       => $dom,
+            hour      => $hour,
+            minute    => $minute,
+            second    => $second,
+            time_zone => $localTZ,
+            );
+        #Compare two DateTime objects. The semantics are compatible with Perl's sort() function; it returns -1 if $dt1 < $dt2, 0 if $dt1 == $dt2, 1 if $dt1 > $dt2.
+        if (DateTime->compare( $snap_dt, $dt ) < 0) {
+            `$cmd delsnapshot $id $snapshot`;
+        }
+    }
+}
+
+sub backup_config {
+    `$rsync -qa --delete /etc/pve/ $configMountPoint/pve/`;
+    `$rsync -qa --delete /root/utils/ $configMountPoint/utils/`;
+}
+
+sub snapshot_config {
+    #
+    # take snapshot
+    #
+    my $name = "periodic_" . $dt_now->ymd('_') . "_" . $dt_now->hms('_');
+    `$zfs snapshot $configDataSet\@$name`;
+}
+
+sub trim_config_snapshot {
+    my @snapshots = grep { /periodic_/ } `$zfs list -t snapshot -o name | $grep $configDataSet`;
+    foreach my $snapshot (@snapshots) {
+        my ($year, $month, $dom, $hour, $minute, $second) = $snapshot =~ m|(\d+)_(\d+)_(\d+)_(\d+)_(\d+)_(\d+)|;
+
+        my $dt = $dt_now->clone()->subtract( days => $keep );
+        my $snap_dt = DateTime->new(
+            year      => $year,
+            month     => $month,
+            day       => $dom,
+            hour      => $hour,
+            minute    => $minute,
+            second    => $second,
+            time_zone => $localTZ,
+            );
+        #Compare two DateTime objects. The semantics are compatible with Perl's sort() function; it returns -1 if $dt1 < $dt2, 0 if $dt1 == $dt2, 1 if $dt1 > $dt2.
+        if (DateTime->compare( $snap_dt, $dt ) < 0) {
+            `$zfs destroy $snapshot`;
+        }
+    }
+}
+
+sub main {
+    my $vm_ids = get_ids($qm);
+    my $container_ids = get_ids($pct);
+
+    map { take_snapshot($qm, $_) } @$vm_ids;
+    map { take_snapshot($pct, $_) } @$container_ids;
+
+    map { trim_snapshot($qm, $_) } @$vm_ids;
+    map { trim_snapshot($pct, $_) } @$container_ids;
+
+    backup_config();
+    snapshot_config();
+    trim_config_snapshot();
+}
+
+main();

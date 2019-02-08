@@ -1,0 +1,28 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use DateTime;
+use Sys::Hostname;
+use Benchmark ':hireswallclock';
+
+my $syncoid = '/root/utils/sanoid/syncoid';
+my $host = hostname;
+my $localDataSet = 'tank/data';
+my @remoteDataSets = (
+    "root\\\@bsys01.veracitynetworks.com:tank/backup/$host/data",
+    "root\\\@bsys02.veracitynetworks.com:tank/backup/$host/data",
+    );
+
+sub push_to_backup_server {
+    foreach my $remoteDataSet (@remoteDataSets) {
+        my $cmd = "`$syncoid --no-sync-snap --compress=none --recursive $localDataSet $remoteDataSet`";
+        timethis(1, $cmd);
+    }
+}
+
+sub main {
+    push_to_backup_server();
+}
+
+main();

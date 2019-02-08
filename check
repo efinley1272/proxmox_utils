@@ -1,0 +1,4 @@
+#!/bin/sh
+mv new old
+ls -l /dev/disk/by-id > new
+diff old new
