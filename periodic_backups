@@ -16,7 +16,7 @@ my @remoteDataSets = (
 
 sub push_to_backup_server {
     foreach my $remoteDataSet (@remoteDataSets) {
-        my $cmd = "`$syncoid --no-sync-snap --compress=none --recursive $localDataSet $remoteDataSet`";
+        my $cmd = "`$syncoid --no-sync-snap --compress=none --recursive --sendoptions=-p $localDataSet $remoteDataSet`";
         timethis(1, $cmd);
     }
 }
