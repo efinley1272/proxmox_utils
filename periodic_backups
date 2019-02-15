@@ -1,28 +1,91 @@
 #!/usr/bin/perl
 
+use Data::GUID;
 use strict;
 use warnings;
 use DateTime;
 use Sys::Hostname;
 use Benchmark ':hireswallclock';
+use Data::Dumper;
 
 my $syncoid = '/root/utils/sanoid/syncoid';
+my $zfs = '/sbin/zfs';
 my $host = hostname;
 my $localDataSet = 'tank/data';
+my $configDataSet = 'tank/config';
 my @remoteDataSets = (
-    "root\\\@bsys01.veracitynetworks.com:tank/backup/$host/data",
-    "root\\\@bsys02.veracitynetworks.com:tank/backup/$host/data",
+    "root\\\@bsys01.veracitynetworks.com:tank/backup",
+    "root\\\@bsys02.veracitynetworks.com:tank/backup",
     );
 
+sub get_local_datasets {
+    my @localDataSets = # array of hashes
+    	map { { 'name' => $_->[0],
+    		'guid' => $_->[1],
+		'source' => $_->[2],
+    	    } } # { 'name' => <dataset_name>, 'guid' => <guid>, 'source' => <source> }
+    grep { $_->[0] ne $localDataSet } # we only want children datasets of $localDataSet
+    map { [split(' ',$_)] } #[<dataset_name>,<guid>,<source>]
+    `$zfs list -H -r -o name,veracity:guid,veracity:source $localDataSet`;
+
+    return \@localDataSets;
+}
+
 sub push_to_backup_server {
+    my $localDatasets = shift;
+    
+    # push config backup
     foreach my $remoteDataSet (@remoteDataSets) {
-        my $cmd = "`$syncoid --no-sync-snap --compress=none --recursive --sendoptions=-p $localDataSet $remoteDataSet`";
-        timethis(1, $cmd);
+	print "pushing config backup to $remoteDataSet\n";
+        my $cmd = "$syncoid --no-sync-snap --compress=none --sendoptions=-p $configDataSet $remoteDataSet/$host.config";
+        #timethis(1, $cmd);
+	`$cmd`;
+    }
+
+    # push VM and containers to backup servers
+    foreach my $remoteDataSet (@remoteDataSets) {
+	foreach my $dataset (@$localDatasets) {
+	    print "pushing $dataset->{'name'} to $remoteDataSet\n";
+	    my $cmd = "$syncoid --no-sync-snap --compress=none --sendoptions=-p $dataset->{'name'} $remoteDataSet/$dataset->{'guid'}";
+	    #timethis(1, $cmd);
+	    `$cmd`;
+	}
+    }
+}
+
+sub set_guid_on_datasets {
+    my $datasets = shift;
+
+    my $guid_regex = Data::GUID->string_guid_regex();
+    
+    foreach my $dataset (@$datasets) {
+	if (not $dataset->{'guid'} =~ m|$guid_regex|) {
+	    my $guid = Data::GUID->new()->as_string();
+	    `$zfs set veracity:guid=$guid $dataset->{'name'}`;
+	}
+    }
+}
+
+sub set_source_on_datasets {
+    my $datasets = shift;
+
+    foreach my $dataset (@$datasets) {
+	my $source = "$host.$dataset->{'name'}";
+	if (not $dataset->{'source'} eq $source) {
+	    print "source is $dataset->{'source'}, setting it to $source\n";
+	    `$zfs set veracity:source=$source $dataset->{'name'}`;
+	}
     }
 }
 
 sub main {
-    push_to_backup_server();
+    my $localDatasets = get_local_datasets();
+    set_guid_on_datasets($localDatasets);
+    set_source_on_datasets($localDatasets);
+
+    $localDatasets = get_local_datasets();
+
+    push_to_backup_server($localDatasets);
 }
 
 main();

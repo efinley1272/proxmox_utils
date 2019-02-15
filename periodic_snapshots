@@ -16,7 +16,7 @@ my $keep = 3; #number of days to keep snapshots
 my $localTZ = DateTime::TimeZone->new( name => 'local' );
 my $dt_now = DateTime->now( time_zone => $localTZ );
 my $localDataSet = 'tank/data';
-my $configDataSet = $localDataSet . '/config';
+my $configDataSet = 'tank/config';
 my $configMountPoint = '/'. $configDataSet;
 
 sub get_ids {
@@ -121,7 +121,7 @@ sub trim_snapshot {
 }
 
 sub backup_config {
-    `$rsync -qa --delete /etc/pve/ $configMountPoint/pve/`;
+    `$rsync -qa --delete /etc/ $configMountPoint/etc/`;
     `$rsync -qa --delete /root/utils/ $configMountPoint/utils/`;
 }
 
