@@ -36,7 +36,7 @@ sub push_to_backup_server {
     
     # push config backup
     foreach my $remoteDataSet (@remoteDataSets) {
-	print "pushing config backup to $remoteDataSet\n";
+	print "pushing $configDataSet to $remoteDataSet/$host.config\n";
         my $cmd = "$syncoid --no-sync-snap --compress=none --sendoptions=-p $configDataSet $remoteDataSet/$host.config";
         #timethis(1, $cmd);
 	`$cmd`;
@@ -45,7 +45,7 @@ sub push_to_backup_server {
     # push VM and containers to backup servers
     foreach my $remoteDataSet (@remoteDataSets) {
 	foreach my $dataset (@$localDatasets) {
-	    print "pushing $dataset->{'name'} to $remoteDataSet\n";
+	    print "pushing $dataset->{'name'} to $remoteDataSet/$dataset->{'guid'}\n";
 	    my $cmd = "$syncoid --no-sync-snap --compress=none --sendoptions=-p $dataset->{'name'} $remoteDataSet/$dataset->{'guid'}";
 	    #timethis(1, $cmd);
 	    `$cmd`;
