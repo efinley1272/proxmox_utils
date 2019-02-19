@@ -11,22 +11,38 @@ use Data::Dumper;
 my $syncoid = '/root/utils/sanoid/syncoid';
 my $zfs = '/sbin/zfs';
 my $host = hostname;
-my $localDataSet = 'tank/data';
-my $configDataSet = 'tank/config';
+my $localDataSetParents = ['rpool/data', 'tank/data'];
 my @remoteDataSets = (
     "root\\\@bsys01.veracitynetworks.com:tank/backup",
     "root\\\@bsys02.veracitynetworks.com:tank/backup",
     );
 
+sub find_config_dataset {
+    my $choices = shift;
+
+    foreach my $choice (@$choices) {
+	my $result = `$zfs list -H -o name $choice`;
+	return $choice if (index($result, $choice) > -1);
+    }
+
+    die "No config dataset found!";
+}
+
+my $configDataSet = find_config_dataset(['rpool/config', 'tank/config']);
+
 sub get_local_datasets {
-    my @localDataSets = # array of hashes
+    my @localDataSets;
+
+    foreach my $localDataSet (@$localDataSetParents) {
+	push @localDataSets, # array of hashes
     	map { { 'name' => $_->[0],
     		'guid' => $_->[1],
 		'source' => $_->[2],
     	    } } # { 'name' => <dataset_name>, 'guid' => <guid>, 'source' => <source> }
-    grep { $_->[0] ne $localDataSet } # we only want children datasets of $localDataSet
-    map { [split(' ',$_)] } #[<dataset_name>,<guid>,<source>]
-    `$zfs list -H -r -o name,veracity:guid,veracity:source $localDataSet`;
+	grep { $_->[0] ne $localDataSet } # we only want children datasets of $localDataSet
+	map { [split(' ',$_)] } #[<dataset_name>,<guid>,<source>]
+	`$zfs list -H -r -o name,veracity:guid,veracity:source $localDataSet`;
+    }
 
     return \@localDataSets;
 }
