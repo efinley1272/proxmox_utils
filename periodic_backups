@@ -10,12 +10,29 @@ use Data::Dumper;
 
 my $syncoid = '/root/utils/sanoid/syncoid';
 my $zfs = '/sbin/zfs';
+my $ssh = '/usr/bin/ssh';
+my $test = '/usr/bin/test';
+my $mv = '/bin/mv';
 my $host = hostname;
 my $localDataSetParents = ['rpool/data', 'tank/data'];
-my @remoteDataSets = (
-    "root\\\@bsys01.veracitynetworks.com:tank/backup",
-    "root\\\@bsys02.veracitynetworks.com:tank/backup",
-    );
+my $remoteDataSets = [
+    {
+	user => 'root',
+	host => 'bsys01.veracitynetworks.com',
+	dataset => 'tank/backup',
+	tokenLocation => '/root/utils/backup_token',
+	tokenFreeName => 'token.free',
+	tokenHeldName => "token.$host",
+    },
+    {
+	user => 'root',
+	host => 'bsys02.veracitynetworks.com',
+	dataset => 'tank/backup',
+	tokenLocation => '/root/utils/backup_token',
+	tokenFreeName => 'token.free',
+	tokenHeldName => "token.$host",
+    },
+    ];
 
 sub find_config_dataset {
     my $choices = shift;
@@ -48,20 +65,55 @@ sub get_local_datasets {
     return \@localDataSets;
 }
 
+sub get_token_from_backup_server {
+    my $rds = shift;
+    
+    print "getting token from $rds->{host}...\n";
+
+    my $remoteUserHost = $rds->{user} . '@' . $rds->{host};
+    my $tokenFrom = $rds->{tokenLocation} . '/' . $rds->{tokenFreeName};
+    my $tokenTo   = $rds->{tokenLocation} . '/' . $rds->{tokenHeldName};
+
+    my $rc = 1;
+    while($rc) {
+	sleep(int(rand(10)));
+    
+	system $ssh, $remoteUserHost, $mv, $tokenFrom, $tokenTo;
+
+	system $ssh, $remoteUserHost, $test, "-e", $tokenTo;
+	$rc = $? >> 8;
+    }
+}
+
+sub free_token_for_backup_server {
+    my $rds = shift;
+
+    print "freeing token for $rds->{host}\n";
+    my $remoteUserHost = $rds->{user} . '@' . $rds->{host};
+    my $tokenFrom = $rds->{tokenLocation} . '/' . $rds->{tokenHeldName};
+    my $tokenTo   = $rds->{tokenLocation} . '/' . $rds->{tokenFreeName};
+
+    system $ssh, $remoteUserHost, $mv, $tokenFrom, $tokenTo;
+}
+
 sub push_to_backup_server {
     my $localDatasets = shift;
     
     # push config backup
-    foreach my $remoteDataSet (@remoteDataSets) {
+    foreach my $rds (@$remoteDataSets) {
+	my $remoteDataSet = $rds->{user} . '@' . $rds->{host} . ':' . $rds->{dataset};
         my $cmd = qq|$syncoid --no-sync-snap --compress=none --sendoptions=-p $configDataSet $remoteDataSet/$host.config|;
+	get_token_from_backup_server($rds);
         #timethis(1, $cmd);
 	print "$cmd\n";
 	`$cmd`;
+	free_token_for_backup_server($rds);
     }
 
     # push VM and containers to backup servers
-    foreach my $remoteDataSet (@remoteDataSets) {
-	foreach my $dataset (@$localDatasets) {
+    foreach my $dataset (@$localDatasets) {
+	foreach my $rds (@$remoteDataSets) {
+	    my $remoteDataSet = $rds->{user} . '@' . $rds->{host} . ':' . $rds->{dataset};
 	    my $cmd;
 	    if ($dataset->{'type'} eq 'filesystem') {
 		$cmd = qq|$syncoid --no-sync-snap --compress=none --sendoptions=-p --recvoptions="-o refquota=none" $dataset->{'name'} $remoteDataSet/$dataset->{'guid'}|;
@@ -69,9 +121,11 @@ sub push_to_backup_server {
 	    else { # type is 'volume'
 		$cmd = qq|$syncoid --no-sync-snap --compress=none --sendoptions=-p $dataset->{'name'} $remoteDataSet/$dataset->{'guid'}|;
 	    }
+	    get_token_from_backup_server($rds);
 	    #timethis(1, $cmd);
 	    print "$cmd\n";
 	    `$cmd`;
+	    free_token_for_backup_server($rds);
 	}
     }
 }
