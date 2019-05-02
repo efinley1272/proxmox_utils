@@ -18,5 +18,10 @@ export PATH="$PATH:/usr/bin:/bin"
 mv /etc/pve/priv/tmp /etc/pve/priv/authorized_keys
 chmod 600 /etc/pve/priv/authorized_keys
 
+#update cluster firewall
+cp /root/utils/proxmox_utils/cluster.fw /etc/pve/firewall/cluster.fw
+chown root:www-data /etc/pve/firewall/cluster.fw
+chmod 640 /etc/pve/firewall/cluster.fw
+
 #update myself
 git -C /root/utils/proxmox_utils pull

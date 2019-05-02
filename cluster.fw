@@ -1,0 +1,32 @@
+[OPTIONS]
+
+enable: 1
+
+[ALIASES]
+
+dc_ansible 66.219.205.2
+dc_veracity_firewall 69.169.190.17 # Veracity External Firewall address
+dc_c7_backup_nodes 66.219.192.208/28
+dc_elliot_mobile_laptop 97.75.191.22 # Elliot's Mobile Laptop address
+dc_linhq_backup_nodes 66.219.241.32/28
+dc_elliot_comcast 174.52.96.0/22 # Elliot's Comcast connection
+
+[IPSET dc_backup_nodes]
+
+dc_c7_backup_nodes
+dc_linhq_backup_nodes
+
+[IPSET management] # Remote Management (special set)
+
+dc_elliot_comcast
+dc_elliot_mobile_laptop
+dc_veracity_firewall
+
+[RULES]
+
+IN HTTP(ACCEPT) -log nolog # Let's Encrypt
+IN SSH(ACCEPT) -source dc_ansible -log nolog
+IN ACCEPT -p tcp -dport 1272 # Netcat
+IN ACCEPT -p udp -dport 1272 # Netcat
+IN SSH(ACCEPT) -source +dc_backup_nodes
+
