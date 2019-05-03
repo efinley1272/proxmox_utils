@@ -8,10 +8,10 @@ export PATH="$PATH:/usr/bin:/bin"
 
 #add stuff to crontab
 #(echo 'MAILTO=""'; crontab -l 2>/dev/null) | crontab -
-(crontab -l 2>/dev/null | grep -v command_marker_1; echo "31 0 * * * /root/utils/proxmox_utils/periodic_snapshots >/dev/null 2>&1 #command_marker_1") | crontab -
-(crontab -l 2>/dev/null | grep -v command_marker_2; echo "31 1 * * * /root/utils/proxmox_utils/periodic_backups >/dev/null 2>&1   #command_marker_2") | crontab -
-(crontab -l 2>/dev/null | grep -v command_marker_3; echo "*/5 * * * * /root/utils/proxmox_utils/firewall_template >/dev/null 2>&1 #command_marker_3") | crontab -
-(crontab -l 2>/dev/null | grep -v command_marker_4; echo "0 * * * * /root/utils/proxmox_utils/update >/dev/null 2>&1              #command_marker_4") | crontab -
+#(crontab -l 2>/dev/null | grep -v command_marker_1; echo "31 0 * * * /root/utils/proxmox_utils/periodic_snapshots >/dev/null 2>&1 #command_marker_1") | crontab -
+#(crontab -l 2>/dev/null | grep -v command_marker_2; echo "31 1 * * * /root/utils/proxmox_utils/periodic_backups >/dev/null 2>&1   #command_marker_2") | crontab -
+#(crontab -l 2>/dev/null | grep -v command_marker_3; echo "*/5 * * * * /root/utils/proxmox_utils/firewall_template >/dev/null 2>&1 #command_marker_3") | crontab -
+#(crontab -l 2>/dev/null | grep -v command_marker_4; echo "0 * * * * /root/utils/proxmox_utils/update >/dev/null 2>&1              #command_marker_4") | crontab -
 
 #add ansible public key
 # (cat /etc/pve/priv/authorized_keys | grep -vE '(^$|ansible)'; echo ""; echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDZWxSm5RfLZXDapgYakL30QyCX47phxyrSGJwUl/66osmOl0cFVNNiyTJ0vkwQnz0JPaEAxPhGuyTZw7icSaiFIGL79GFVz1WauSYAoSaejwpCSwR2585cMENzPAxeMEWQYADPVkTbheWFA9Gv5Y9fQYzoOcYThb2kha6wid5/M3g+akfeAMyxwx6EE6W/L4xGZxgLKkBc81kfouFw8EbL/dnOghXp05J7LULK42K3sBviwZpaONdSTpqJTqnUhZOZULvhJ6bp63r/6yiwmLPUwLoYcQC64lKeoRsokO18MpvRgdAbm7ELXc2/f2/QnRInqWIrsNCOshEn59Q2bDSP root@ansible") > /etc/pve/priv/tmp
