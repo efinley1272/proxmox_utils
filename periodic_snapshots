@@ -157,17 +157,17 @@ sub trim_config_snapshot {
 
 sub main {
     my $vm_ids = get_ids($qm);
-#    my $container_ids = get_ids($pct);
+    my $container_ids = get_ids($pct);
 
-#    map { take_snapshot($qm, $_) } @$vm_ids;
-#    map { take_snapshot($pct, $_) } @$container_ids;
+    map { take_snapshot($qm, $_) } @$vm_ids;
+    map { take_snapshot($pct, $_) } @$container_ids;
 
     map { trim_snapshot($qm, $_) } @$vm_ids;
-#    map { trim_snapshot($pct, $_) } @$container_ids;
+    map { trim_snapshot($pct, $_) } @$container_ids;
 
-#    backup_config();
-#    snapshot_config();
-#    trim_config_snapshot();
+    backup_config();
+    snapshot_config();
+    trim_config_snapshot();
 }
 
 main();
