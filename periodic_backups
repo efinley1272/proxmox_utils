@@ -7,6 +7,7 @@ use DateTime;
 use Sys::Hostname;
 use Benchmark ':hireswallclock';
 use Data::Dumper;
+use Parallel::ForkManager;
 
 my $syncoid = '/root/utils/sanoid/syncoid';
 my $zfs = '/sbin/zfs';
@@ -99,20 +100,24 @@ sub free_token_for_backup_server {
 sub push_to_backup_server {
     my $localDatasets = shift;
     
-    # push config backup
+    my $pfm = Parallel::ForkManager->new(10);
+    
     foreach my $rds (@$remoteDataSets) {
+	#Forks and returns the pid for the child
+	my $pid = $pfm->start and next;
+
+	#we are now in the child process, do the work
+	get_token_from_backup_server($rds);
+
+	# push config backup
 	my $remoteDataSet = $rds->{user} . '@' . $rds->{host} . ':' . $rds->{dataset};
         my $cmd = qq|$syncoid --no-sync-snap --compress=none --sendoptions=-p $configDataSet $remoteDataSet/$host.config|;
-	get_token_from_backup_server($rds);
         #timethis(1, $cmd);
 	print "$cmd\n";
 	`$cmd`;
-	free_token_for_backup_server($rds);
-    }
 
-    # push VM and containers to backup servers
-    foreach my $dataset (@$localDatasets) {
-	foreach my $rds (@$remoteDataSets) {
+	# push VM and containers to backup server
+	foreach my $dataset (@$localDatasets) {
 	    my $remoteDataSet = $rds->{user} . '@' . $rds->{host} . ':' . $rds->{dataset};
 	    my $cmd;
 	    if ($dataset->{'type'} eq 'filesystem') {
@@ -121,13 +126,47 @@ sub push_to_backup_server {
 	    else { # type is 'volume'
 		$cmd = qq|$syncoid --no-sync-snap --compress=none --sendoptions=-p $dataset->{'name'} $remoteDataSet/$dataset->{'guid'}|;
 	    }
-	    get_token_from_backup_server($rds);
 	    #timethis(1, $cmd);
 	    print "$cmd\n";
 	    `$cmd`;
-	    free_token_for_backup_server($rds);
 	}
+
+	free_token_for_backup_server($rds);
+
+	$pfm->finish; #Terminate the child process
     }
+
+    $pfm->wait_all_children;
+
+    # # push config backup
+    # foreach my $rds (@$remoteDataSets) {
+    # 	my $remoteDataSet = $rds->{user} . '@' . $rds->{host} . ':' . $rds->{dataset};
+    #     my $cmd = qq|$syncoid --no-sync-snap --compress=none --sendoptions=-p $configDataSet $remoteDataSet/$host.config|;
+    # 	get_token_from_backup_server($rds);
+    #     #timethis(1, $cmd);
+    # 	print "$cmd\n";
+    # 	`$cmd`;
+    # 	free_token_for_backup_server($rds);
+    # }
+
+    # # push VM and containers to backup servers
+    # foreach my $dataset (@$localDatasets) {
+    # 	foreach my $rds (@$remoteDataSets) {
+    # 	    my $remoteDataSet = $rds->{user} . '@' . $rds->{host} . ':' . $rds->{dataset};
+    # 	    my $cmd;
+    # 	    if ($dataset->{'type'} eq 'filesystem') {
+    # 		$cmd = qq|$syncoid --no-sync-snap --compress=none --sendoptions=-p --recvoptions="-o refquota=none" $dataset->{'name'} $remoteDataSet/$dataset->{'guid'}|;
+    # 	    }
+    # 	    else { # type is 'volume'
+    # 		$cmd = qq|$syncoid --no-sync-snap --compress=none --sendoptions=-p $dataset->{'name'} $remoteDataSet/$dataset->{'guid'}|;
+    # 	    }
+    # 	    get_token_from_backup_server($rds);
+    # 	    #timethis(1, $cmd);
+    # 	    print "$cmd\n";
+    # 	    `$cmd`;
+    # 	    free_token_for_backup_server($rds);
+    # 	}
+    # }
 }
 
 sub set_guid_on_datasets {
