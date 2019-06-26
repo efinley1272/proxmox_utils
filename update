@@ -24,7 +24,7 @@ export PATH="$PATH:/usr/bin:/bin"
 # chmod 640 /etc/pve/firewall/cluster.fw
 
 #install perl parallel fork manager
-apt install libparallel-forkmanager-perl
+apt-get -qq install libparallel-forkmanager-perl
 
 #update myself
 git -C /root/utils/proxmox_utils pull
