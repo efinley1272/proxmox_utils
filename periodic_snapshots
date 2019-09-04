@@ -12,7 +12,7 @@ my $zfs = '/sbin/zfs';
 my $grep = '/bin/grep';
 my $rsync = '/usr/bin/rsync';
 
-my $keep = 10; #number of days to keep snapshots
+my $keep = 5; #number of snapshots to keep
 my $localTZ = DateTime::TimeZone->new( name => 'local' );
 my $dt_now = DateTime->now( time_zone => $localTZ );
 my $localDataSet = 'tank/data' if (-e '/tank/data');
@@ -102,7 +102,7 @@ sub trim_snapshot {
     my $id = shift;
 
     my @snapshots = map { /^.*?(periodic_.*?)\s/ } grep { /periodic_/ } `$cmd listsnapshot $id`;
-    while (@snapshots > $keep) {
+    while (scalar(@snapshots) > $keep) {
         my $snapshot = shift(@snapshots);
         `$cmd delsnapshot $id $snapshot`;
     }
@@ -142,7 +142,7 @@ sub snapshot_config {
 
 sub trim_config_snapshot {
     my @snapshots = grep { /periodic_/ } `$zfs list -t snapshot -o name | $grep $configDataSet`;
-    while (@snapshots > $keep) {
+    while (scalar(@snapshots) > $keep) {
         my $snapshot = shift(@snapshots);
         `$zfs destroy $snapshot`;
     }
