@@ -12,7 +12,7 @@ my $zfs = '/sbin/zfs';
 my $grep = '/bin/grep';
 my $rsync = '/usr/bin/rsync';
 
-my $keep = 5; #number of days to keep snapshots
+my $keep = 10; #number of days to keep snapshots
 my $localTZ = DateTime::TimeZone->new( name => 'local' );
 my $dt_now = DateTime->now( time_zone => $localTZ );
 my $localDataSet = 'tank/data' if (-e '/tank/data');
@@ -102,24 +102,29 @@ sub trim_snapshot {
     my $id = shift;
 
     my @snapshots = map { /^.*?(periodic_.*?)\s/ } grep { /periodic_/ } `$cmd listsnapshot $id`;
-    foreach my $snapshot (@snapshots) {
-        my ($year, $month, $dom, $hour, $minute, $second) = $snapshot =~ m|(\d+)_(\d+)_(\d+)_(\d+)_(\d+)_(\d+)|;
-
-        my $dt = $dt_now->clone()->subtract( days => $keep );
-        my $snap_dt = DateTime->new(
-            year      => $year,
-            month     => $month,
-            day       => $dom,
-            hour      => $hour,
-            minute    => $minute,
-            second    => $second,
-            time_zone => $localTZ,
-            );
-        #Compare two DateTime objects. The semantics are compatible with Perl's sort() function; it returns -1 if $dt1 < $dt2, 0 if $dt1 == $dt2, 1 if $dt1 > $dt2.
-        if (DateTime->compare( $snap_dt, $dt ) < 0) {
-            `$cmd delsnapshot $id $snapshot`;
-        }
+    while (@snapshots > $keep) {
+        my $snapshot = shift(@snapshots);
+        `$cmd delsnapshot $id $snapshot`;
     }
+        
+    # foreach my $snapshot (@snapshots) {
+    #     my ($year, $month, $dom, $hour, $minute, $second) = $snapshot =~ m|(\d+)_(\d+)_(\d+)_(\d+)_(\d+)_(\d+)|;
+
+    #     my $dt = $dt_now->clone()->subtract( days => $keep );
+    #     my $snap_dt = DateTime->new(
+    #         year      => $year,
+    #         month     => $month,
+    #         day       => $dom,
+    #         hour      => $hour,
+    #         minute    => $minute,
+    #         second    => $second,
+    #         time_zone => $localTZ,
+    #         );
+    #     #Compare two DateTime objects. The semantics are compatible with Perl's sort() function; it returns -1 if $dt1 < $dt2, 0 if $dt1 == $dt2, 1 if $dt1 > $dt2.
+    #     if (DateTime->compare( $snap_dt, $dt ) < 0) {
+    #         `$cmd delsnapshot $id $snapshot`;
+    #     }
+    # }
 }
 
 sub backup_config {
@@ -137,24 +142,28 @@ sub snapshot_config {
 
 sub trim_config_snapshot {
     my @snapshots = grep { /periodic_/ } `$zfs list -t snapshot -o name | $grep $configDataSet`;
-    foreach my $snapshot (@snapshots) {
-        my ($year, $month, $dom, $hour, $minute, $second) = $snapshot =~ m|(\d+)_(\d+)_(\d+)_(\d+)_(\d+)_(\d+)|;
-
-        my $dt = $dt_now->clone()->subtract( days => $keep );
-        my $snap_dt = DateTime->new(
-            year      => $year,
-            month     => $month,
-            day       => $dom,
-            hour      => $hour,
-            minute    => $minute,
-            second    => $second,
-            time_zone => $localTZ,
-            );
-        #Compare two DateTime objects. The semantics are compatible with Perl's sort() function; it returns -1 if $dt1 < $dt2, 0 if $dt1 == $dt2, 1 if $dt1 > $dt2.
-        if (DateTime->compare( $snap_dt, $dt ) < 0) {
-            `$zfs destroy $snapshot`;
-        }
+    while (@snapshots > $keep) {
+        my $snapshot = shift(@snapshots);
+        `$zfs destroy $snapshot`;
     }
+    # foreach my $snapshot (@snapshots) {
+    #     my ($year, $month, $dom, $hour, $minute, $second) = $snapshot =~ m|(\d+)_(\d+)_(\d+)_(\d+)_(\d+)_(\d+)|;
+
+    #     my $dt = $dt_now->clone()->subtract( days => $keep );
+    #     my $snap_dt = DateTime->new(
+    #         year      => $year,
+    #         month     => $month,
+    #         day       => $dom,
+    #         hour      => $hour,
+    #         minute    => $minute,
+    #         second    => $second,
+    #         time_zone => $localTZ,
+    #         );
+    #     #Compare two DateTime objects. The semantics are compatible with Perl's sort() function; it returns -1 if $dt1 < $dt2, 0 if $dt1 == $dt2, 1 if $dt1 > $dt2.
+    #     if (DateTime->compare( $snap_dt, $dt ) < 0) {
+    #         `$zfs destroy $snapshot`;
+    #     }
+    # }
 }
 
 sub main {
