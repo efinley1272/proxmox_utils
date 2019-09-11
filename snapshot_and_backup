@@ -1,0 +1,4 @@
+#/bin/sh
+
+/root/utils/proxmox_utils/periodic_snapshots
+/root/utils/proxmox_utils/periodic_backups

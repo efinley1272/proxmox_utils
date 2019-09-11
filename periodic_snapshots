@@ -72,6 +72,18 @@ sub start {
     `$cmd start $id`;
 }
 
+sub snapshot_exists {
+    my $cmd = shift;
+    my $id = shift;
+    my $name = shift;
+
+    my @snapshots = map { /^.*?(periodic_.*?)\s/ } grep { /periodic_/ } `$cmd listsnapshot $id`;
+    foreach my $snapshot (@snapshots) {
+        return 1 if ($snapshot eq $name);
+    }
+    return 0;
+}
+
 sub take_snapshot {
     my $cmd = shift;
     my $id = shift;
@@ -89,7 +101,10 @@ sub take_snapshot {
     # take snapshot
     #
     my $name = "periodic_" . $status . "_" . $dt_now->ymd('_') . "_" . $dt_now->hms('_');
-    `$cmd snapshot $id $name`;
+    do {
+        `$cmd snapshot $id $name`;
+        sleep(5);
+    } until snapshot_exists($cmd, $id, $name);
 
     #
     # start it back up if it was originally running and now it's not
