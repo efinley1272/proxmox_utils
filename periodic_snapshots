@@ -72,13 +72,29 @@ sub start {
     `$cmd start $id`;
 }
 
+sub get_snapshots {
+    my $cmd = shift;
+    my $id = shift;
+
+    my @snapshots =
+        map { $_->[0] } #Schwartzian remap
+    sort { $a->[1] cmp $b->[1] } # Schwartzian sort
+    map { [$_, (m|(\d\d\d\d_\d\d_\d\d_\d\d_\d\d_\d\d)|)[0]] } #Schwartzian transform to sort by periodic date
+    map { /^.*?(periodic_.*?)\s/ } #grab just the name containing 'periodic_<some date>'
+    grep { /periodic_/ } #grab lines containing 'periodic_'
+    grep { not /current/ } #skip lines containing 'current'
+    `$cmd listsnapshot $id`;
+
+    return \@snapshots;
+}
+
 sub snapshot_exists {
     my $cmd = shift;
     my $id = shift;
     my $name = shift;
 
-    my @snapshots = map { /^.*?(periodic_.*?)\s/ } grep { /periodic_/ } `$cmd listsnapshot $id`;
-    foreach my $snapshot (@snapshots) {
+    my $snapshots = get_snapshots($cmd, $id);
+    foreach my $snapshot (@$snapshots) {
         return 1 if ($snapshot eq $name);
     }
     return 0;
@@ -94,17 +110,18 @@ sub take_snapshot {
     # shut it down if it's not marked 'noshutdown' in 'Notes'
     #
     my $original_status = get_status($cmd, $id);
-    if ($original_status eq 'running') { do_shutdown($cmd, $id) if can_shutdown($cmd, $id); }
+    if ($original_status eq 'running') { 
+        if (can_shutdown($cmd, $id)) {
+            do_shutdown($cmd, $id);
+        }
+    }
     my $status = get_status($cmd, $id);
 
     #
     # take snapshot
     #
     my $name = "periodic_" . $status . "_" . $dt_now->ymd('_') . "_" . $dt_now->hms('_');
-    do {
-        `$cmd snapshot $id $name`;
-        sleep(5);
-    } until snapshot_exists($cmd, $id, $name);
+    `$cmd snapshot $id $name`;
 
     #
     # start it back up if it was originally running and now it's not
@@ -116,9 +133,9 @@ sub trim_snapshot {
     my $cmd = shift;
     my $id = shift;
 
-    my @snapshots = map { /^.*?(periodic_.*?)\s/ } grep { /periodic_/ } `$cmd listsnapshot $id`;
-    while (scalar(@snapshots) > $keep) {
-        my $snapshot = shift(@snapshots);
+    my $snapshots = get_snapshots($cmd, $id);
+    while (scalar(@$snapshots) > $keep) {
+        my $snapshot = shift(@$snapshots);
         `$cmd delsnapshot $id $snapshot`;
     }
         
